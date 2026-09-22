@@ -1,0 +1,1 @@
+ALTER TABLE `surat` ADD `sheet_synced` integer DEFAULT 1 NOT NULL;

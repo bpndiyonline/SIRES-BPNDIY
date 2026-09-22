@@ -1,4 +1,4 @@
-import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 export const surat = sqliteTable("surat", {
   id: text("id").primaryKey(),
   tanggalMasuk: text("tanggal_masuk").notNull(),
@@ -12,4 +12,6 @@ export const surat = sqliteTable("surat", {
   catatan: text("catatan").notNull().default(""),
   tujuanDisposisi: text("tujuan_disposisi").notNull().default(""),
   createdAt: text("created_at").notNull(),
+  // Existing records stay out of a newly connected sheet; new records opt in at insert time.
+  sheetSynced: integer("sheet_synced").notNull().default(1),
 });

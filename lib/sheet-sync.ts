@@ -25,7 +25,7 @@ type SheetRecord = {
 const clean = (value: unknown, max: number) => String(value ?? "").trim().slice(0, max);
 const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
-/** Append new site records, then import valid rows from the sheet into the site. */
+/** Append new site records, then import every populated sheet row into the site. */
 export async function syncSheet(db: D1Database): Promise<boolean> {
   const url = env.SHEET_WEB_APP_URL;
   const secret = env.SHEET_SYNC_SECRET;
@@ -64,14 +64,13 @@ export async function syncSheet(db: D1Database): Promise<boolean> {
     const tanggalMasuk = clean(entry.tanggalMasuk, 10);
     const jenisSurat = clean(entry.jenisSurat, 10);
     const tanggalKeluar = clean(entry.tanggalKeluar, 10);
-    if (!idPattern.test(id) || !validDate(tanggalMasuk) ||
-        !["Asli", "Tembusan"].includes(jenisSurat) ||
-        (tanggalKeluar && !validDate(tanggalKeluar))) continue;
+    if (!idPattern.test(id)) continue;
 
-    const nomorSurat = clean(entry.nomorSurat, 150) || "-";
+    const nomorSurat = clean(entry.nomorSurat, 150);
     const perihal = clean(entry.perihal, 500);
     const instansi = clean(entry.instansi, 250);
-    if (!perihal || !instansi) continue;
+    const storedTanggalMasuk = validDate(tanggalMasuk) ? tanggalMasuk : "";
+    const storedTanggalKeluar = validDate(tanggalKeluar) ? tanggalKeluar : "";
     statements.push(db.prepare(`
       INSERT INTO surat (id, tanggal_masuk, nomor_surat, nomor_agenda, perihal,
         instansi, jenis_surat, tanggal_keluar, disposisi, catatan,
@@ -89,10 +88,13 @@ export async function syncSheet(db: D1Database): Promise<boolean> {
         catatan = excluded.catatan,
         tujuan_disposisi = excluded.tujuan_disposisi,
         sheet_synced = 1
-    `).bind(id, tanggalMasuk, nomorSurat, clean(entry.nomorAgenda, 150) || null,
-      perihal, instansi, jenisSurat, tanggalKeluar || null,
+    `).bind(id, storedTanggalMasuk, nomorSurat, clean(entry.nomorAgenda, 150) || null,
+      perihal, instansi, ["Asli", "Tembusan"].includes(jenisSurat) ? jenisSurat : "",
+      storedTanggalKeluar || null,
       clean(entry.disposisi, 500), clean(entry.catatan, 2000),
-      clean(entry.tujuanDisposisi, 250), `${tanggalMasuk}T00:00:00.000Z`));
+      clean(entry.tujuanDisposisi, 250), storedTanggalMasuk
+        ? `${storedTanggalMasuk}T00:00:00.000Z`
+        : "1970-01-01T00:00:00.000Z"));
   }
   for (let index = 0; index < statements.length; index += 100) {
     await db.batch(statements.slice(index, index + 100));

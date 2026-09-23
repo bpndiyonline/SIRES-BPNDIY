@@ -68,15 +68,12 @@ function doPost(e) {
             ids[index][0] = id;
             idsChanged = true;
           }
-          if (!String(row[1] || '').trim() || !String(row[4] || '').trim() ||
-              !String(row[5] || '').trim() || !['Asli', 'Tembusan'].includes(String(row[6] || '').trim())) return;
           const tanggalMasuk = dateText(row[1]);
           const tanggalKeluar = dateText(row[7]);
-          if (!tanggalMasuk || (row[7] && !tanggalKeluar)) return;
           sheetRecords.push({
             id,
             tanggalMasuk,
-            nomorSurat: text(row[2]) || '-',
+            nomorSurat: text(row[2]),
             nomorAgenda: text(row[3]),
             perihal: text(row[4]),
             instansi: text(row[5]),

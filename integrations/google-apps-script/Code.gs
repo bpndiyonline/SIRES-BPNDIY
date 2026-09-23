@@ -50,15 +50,44 @@ function doPost(e) {
         syncedIds.push(record.id);
       });
 
-      const agendas = [];
+      const sheetRecords = [];
       const lastAfter = sheet.getLastRow();
       if (lastAfter > 1) {
-        sheet.getRange(2, 4, lastAfter - 1, 9).getDisplayValues().forEach(row => {
-          const id = row[8]; // Column L; column D is index 0 in this range.
-          if (id) agendas.push({ id, agenda: row[0] });
+        const range = sheet.getRange(2, 1, lastAfter - 1, 12);
+        const values = range.getValues();
+        const ids = range.getColumn() === 1
+          ? sheet.getRange(2, 12, lastAfter - 1, 1).getDisplayValues()
+          : [];
+        let idsChanged = false;
+        values.forEach((row, index) => {
+          if (!String(row[1] || '').trim() || !String(row[4] || '').trim() ||
+              !String(row[5] || '').trim() || !['Asli', 'Tembusan'].includes(String(row[6] || '').trim())) return;
+          let id = String(ids[index][0] || '').trim();
+          if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(id)) {
+            id = Utilities.getUuid();
+            ids[index][0] = id;
+            idsChanged = true;
+          }
+          const tanggalMasuk = dateText(row[1]);
+          const tanggalKeluar = dateText(row[7]);
+          if (!tanggalMasuk || (row[7] && !tanggalKeluar)) return;
+          sheetRecords.push({
+            id,
+            tanggalMasuk,
+            nomorSurat: text(row[2]) || '-',
+            nomorAgenda: text(row[3]),
+            perihal: text(row[4]),
+            instansi: text(row[5]),
+            jenisSurat: text(row[6]),
+            tanggalKeluar,
+            disposisi: text(row[8]),
+            catatan: text(row[9]),
+            tujuanDisposisi: text(row[10])
+          });
         });
+        if (idsChanged) sheet.getRange(2, 12, lastAfter - 1, 1).setValues(ids);
       }
-      return json({ ok: true, syncedIds, agendas });
+      return json({ ok: true, syncedIds, sheetRecords });
     } finally {
       lock.releaseLock();
     }
@@ -71,6 +100,19 @@ function text(value) {
   const result = String(value == null ? '' : value);
   // Keep user-entered text from becoming a spreadsheet formula.
   return /^[=+\-@]/.test(result) ? "'" + result : result;
+}
+
+function dateText(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value)) {
+    return Utilities.formatDate(value, 'Asia/Jakarta', 'yyyy-MM-dd');
+  }
+  const raw = String(value).trim();
+  let match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (match) return match[1] + '-' + match[2].padStart(2, '0') + '-' + match[3].padStart(2, '0');
+  match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) return match[3] + '-' + match[2].padStart(2, '0') + '-' + match[1].padStart(2, '0');
+  return '';
 }
 
 function json(value) {

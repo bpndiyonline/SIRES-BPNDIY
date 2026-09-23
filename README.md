@@ -12,7 +12,7 @@ Sheet target: `Register Surat Masuk` → `Sheet1`. Website tetap menyimpan data 
 
 Skrip untuk sheet ada di `integrations/google-apps-script/Code.gs`. Buat proyek Apps Script yang terikat pada spreadsheet, tempel skrip, lalu tambahkan Script Property `SIRES_SYNC_SECRET` dengan nilai acak yang panjang. Deploy sebagai Web App yang berjalan sebagai pemilik, dengan akses yang memungkinkan server SiReS mengirim permintaan. Simpan URL `/exec` sebagai `SHEET_WEB_APP_URL` dan nilai rahasia yang sama sebagai `SHEET_SYNC_SECRET` di pengaturan runtime Sites (keduanya tidak diletakkan di kode klien). Deploy ulang versi Situs setelah konfigurasi runtime berubah.
 
-Skrip memeriksa header A–K sebelum menulis, menolak jika L1 sudah digunakan untuk keperluan lain, dan hanya menambahkan baris untuk ID baru. Ketika situs dimuat, situs membaca kolom agenda dari sheet dan memperbarui nomor yang cocok di database. Jika sheet sementara tidak dapat dijangkau, entri baru tetap tersimpan di situs dan dicoba lagi saat situs dimuat berikutnya.
+Skrip memeriksa header A–K sebelum menulis, menolak jika L1 sudah digunakan untuk keperluan lain, dan hanya menambahkan baris untuk ID baru. Ketika situs dimuat, semua baris sheet yang valid diimpor atau diperbarui di database. Baris lama yang belum memiliki `SiReS ID` mendapat ID baru di kolom L agar tidak terduplikasi. Tanggal dalam bentuk tanggal Google Sheets, `dd/mm/yyyy`, atau `yyyy-mm-dd` dinormalisasi untuk situs. Jika sheet sementara tidak dapat dijangkau, entri baru tetap tersimpan di situs dan dicoba lagi saat situs dimuat berikutnya.
 
 ## Pengembangan
 

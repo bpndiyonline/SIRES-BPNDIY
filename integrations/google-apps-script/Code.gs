@@ -86,7 +86,13 @@ function doPost(e) {
         });
         if (idsChanged) sheet.getRange(2, 12, lastAfter - 1, 1).setValues(ids);
       }
-      return json({ ok: true, syncedIds, sheetRecords });
+      return json({
+        ok: true,
+        syncedIds,
+        sheetRecords,
+        authoritativeSnapshot: true,
+        sheetRecordCount: sheetRecords.length
+      });
     } finally {
       lock.releaseLock();
     }

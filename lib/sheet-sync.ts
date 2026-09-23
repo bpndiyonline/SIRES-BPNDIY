@@ -4,6 +4,8 @@ type SheetReply = {
   ok?: boolean;
   syncedIds?: unknown;
   sheetRecords?: unknown;
+  authoritativeSnapshot?: unknown;
+  sheetRecordCount?: unknown;
 };
 
 const idPattern = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i;
@@ -25,7 +27,7 @@ type SheetRecord = {
 const clean = (value: unknown, max: number) => String(value ?? "").trim().slice(0, max);
 const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
-/** Append new site records, then import every populated sheet row into the site. */
+/** Append new site records, then mirror every populated sheet row into the site. */
 export async function syncSheet(db: D1Database): Promise<boolean> {
   const url = env.SHEET_WEB_APP_URL;
   const secret = env.SHEET_SYNC_SECRET;
@@ -50,6 +52,9 @@ export async function syncSheet(db: D1Database): Promise<boolean> {
   if (data.ok !== true || !Array.isArray(data.syncedIds) || !Array.isArray(data.sheetRecords)) {
     throw new Error("Invalid sheet response");
   }
+  if (data.authoritativeSnapshot !== true || data.sheetRecordCount !== data.sheetRecords.length) {
+    throw new Error("Incomplete sheet snapshot");
+  }
 
   const pending = new Set(results.map(row => String(row.id)));
   const saved = data.syncedIds.filter((id): id is string => typeof id === "string" && pending.has(id));
@@ -60,10 +65,11 @@ export async function syncSheet(db: D1Database): Promise<boolean> {
     SELECT id, tanggal_masuk AS tanggalMasuk, nomor_surat AS nomorSurat,
       nomor_agenda AS nomorAgenda, perihal, instansi, jenis_surat AS jenisSurat,
       tanggal_keluar AS tanggalKeluar, disposisi, catatan,
-      tujuan_disposisi AS tujuanDisposisi
+      tujuan_disposisi AS tujuanDisposisi, sheet_synced AS sheetSynced
     FROM surat
   `).all();
   const currentById = new Map(current.results.map(row => [String(row.id), row]));
+  const sheetIds = new Set<string>();
   const statements: D1PreparedStatement[] = [];
   for (const item of data.sheetRecords) {
     if (!item || typeof item !== "object") continue;
@@ -73,6 +79,7 @@ export async function syncSheet(db: D1Database): Promise<boolean> {
     const jenisSurat = clean(entry.jenisSurat, 10);
     const tanggalKeluar = clean(entry.tanggalKeluar, 10);
     if (!idPattern.test(id)) continue;
+    sheetIds.add(id);
 
     const nomorSurat = clean(entry.nomorSurat, 150);
     const perihal = clean(entry.perihal, 500);
@@ -118,6 +125,14 @@ export async function syncSheet(db: D1Database): Promise<boolean> {
   }
   for (let index = 0; index < statements.length; index += 100) {
     await db.batch(statements.slice(index, index + 100));
+  }
+  const deletions = current.results
+    .filter(row => Number(row.sheetSynced) === 1)
+    .map(row => String(row.id))
+    .filter(id => !sheetIds.has(id))
+    .map(id => db.prepare("DELETE FROM surat WHERE id = ?").bind(id));
+  for (let index = 0; index < deletions.length; index += 100) {
+    await db.batch(deletions.slice(index, index + 100));
   }
   return true;
 }

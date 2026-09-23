@@ -56,6 +56,14 @@ export async function syncSheet(db: D1Database): Promise<boolean> {
   for (const id of saved) {
     await db.prepare("UPDATE surat SET sheet_synced = 1 WHERE id = ?").bind(id).run();
   }
+  const current = await db.prepare(`
+    SELECT id, tanggal_masuk AS tanggalMasuk, nomor_surat AS nomorSurat,
+      nomor_agenda AS nomorAgenda, perihal, instansi, jenis_surat AS jenisSurat,
+      tanggal_keluar AS tanggalKeluar, disposisi, catatan,
+      tujuan_disposisi AS tujuanDisposisi
+    FROM surat
+  `).all();
+  const currentById = new Map(current.results.map(row => [String(row.id), row]));
   const statements: D1PreparedStatement[] = [];
   for (const item of data.sheetRecords) {
     if (!item || typeof item !== "object") continue;
@@ -71,6 +79,20 @@ export async function syncSheet(db: D1Database): Promise<boolean> {
     const instansi = clean(entry.instansi, 250);
     const storedTanggalMasuk = validDate(tanggalMasuk) ? tanggalMasuk : "";
     const storedTanggalKeluar = validDate(tanggalKeluar) ? tanggalKeluar : "";
+    const values = {
+      tanggalMasuk: storedTanggalMasuk,
+      nomorSurat,
+      nomorAgenda: clean(entry.nomorAgenda, 150) || null,
+      perihal,
+      instansi,
+      jenisSurat: ["Asli", "Tembusan"].includes(jenisSurat) ? jenisSurat : "",
+      tanggalKeluar: storedTanggalKeluar || null,
+      disposisi: clean(entry.disposisi, 500),
+      catatan: clean(entry.catatan, 2000),
+      tujuanDisposisi: clean(entry.tujuanDisposisi, 250),
+    };
+    const existing = currentById.get(id);
+    if (existing && Object.entries(values).every(([key, value]) => existing[key] === value)) continue;
     statements.push(db.prepare(`
       INSERT INTO surat (id, tanggal_masuk, nomor_surat, nomor_agenda, perihal,
         instansi, jenis_surat, tanggal_keluar, disposisi, catatan,
@@ -88,11 +110,9 @@ export async function syncSheet(db: D1Database): Promise<boolean> {
         catatan = excluded.catatan,
         tujuan_disposisi = excluded.tujuan_disposisi,
         sheet_synced = 1
-    `).bind(id, storedTanggalMasuk, nomorSurat, clean(entry.nomorAgenda, 150) || null,
-      perihal, instansi, ["Asli", "Tembusan"].includes(jenisSurat) ? jenisSurat : "",
-      storedTanggalKeluar || null,
-      clean(entry.disposisi, 500), clean(entry.catatan, 2000),
-      clean(entry.tujuanDisposisi, 250), storedTanggalMasuk
+    `).bind(id, values.tanggalMasuk, values.nomorSurat, values.nomorAgenda,
+      values.perihal, values.instansi, values.jenisSurat, values.tanggalKeluar,
+      values.disposisi, values.catatan, values.tujuanDisposisi, storedTanggalMasuk
         ? `${storedTanggalMasuk}T00:00:00.000Z`
         : "1970-01-01T00:00:00.000Z"));
   }

@@ -60,14 +60,16 @@ function doPost(e) {
           : [];
         let idsChanged = false;
         values.forEach((row, index) => {
-          if (!String(row[1] || '').trim() || !String(row[4] || '').trim() ||
-              !String(row[5] || '').trim() || !['Asli', 'Tembusan'].includes(String(row[6] || '').trim())) return;
+          // Every populated register row gets an ID, even if a required website field is incomplete.
+          if (!row.slice(0, 11).some(value => String(value || '').trim())) return;
           let id = String(ids[index][0] || '').trim();
           if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(id)) {
             id = Utilities.getUuid();
             ids[index][0] = id;
             idsChanged = true;
           }
+          if (!String(row[1] || '').trim() || !String(row[4] || '').trim() ||
+              !String(row[5] || '').trim() || !['Asli', 'Tembusan'].includes(String(row[6] || '').trim())) return;
           const tanggalMasuk = dateText(row[1]);
           const tanggalKeluar = dateText(row[7]);
           if (!tanggalMasuk || (row[7] && !tanggalKeluar)) return;
